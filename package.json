@@ -1,0 +1,22 @@
+{
+  "name": "ola-map-sdk",
+  "version": "1.1.5",
+  "description": "A Node.js SDK for Ola Maps API",
+  "main": "src/index.js",
+  "keywords": [
+    "ola",
+    "maps",
+    "sdk",
+    "ola map",
+    "maps api",
+    "ola maps sdk",
+    "ola maps api",
+    "ola maps sdk for node.js"
+  ],
+  "author": "Kunal Kongkan Kashyap",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "uuid": "^10.0.0"
+  }
+}
