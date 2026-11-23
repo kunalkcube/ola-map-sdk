@@ -1,3 +1,7 @@
 node_modules/
+dist/
+coverage/
+*.tgz
 vanilla-ex/
 ola-map-api-docs.md
+skills/
