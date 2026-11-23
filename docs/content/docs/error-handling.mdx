@@ -1,0 +1,90 @@
+---
+title: Error Handling
+description: Typed error hierarchy (OlaMapsError, OlaAuthError, OlaRateLimitError, OlaValidationError, OlaTimeoutError, OlaNetworkError) with automatic secret redaction and Retry-After parsing.
+---
+
+Every failure in `ola-map-sdk` v2.0 — invalid coordinates, exceeded API caps, authentication errors, HTTP 429 rate limits, request timeouts, or network outages — throws a typed subclass of `OlaMapsError` with **zero `console.error` side effects** and **automatic secret redaction**.
+
+## Error Hierarchy
+
+| Class | Default `code` | Typical Trigger |
+| --- | --- | --- |
+| `OlaMapsError` | `'OLA_MAPS_ERROR'` | Base class for all SDK errors and generic HTTP `5xx` / other non-2xx responses. |
+| `OlaAuthError` | `'OLA_AUTH_ERROR'` | HTTP `401` / `403`, failed OAuth token exchange, or empty `accessToken` provider result. |
+| `OlaRateLimitError` | `'OLA_RATE_LIMIT_ERROR'` | HTTP `429 Too Many Requests` (populates `err.retryAfter` in ms when `Retry-After` is present). |
+| `OlaValidationError` | `'OLA_VALIDATION_ERROR'` | Local fail-fast validation errors (invalid coords, exceeded caps like >25 elevations, missing required options) or HTTP `400` / `422`. |
+| `OlaTimeoutError` | `'OLA_TIMEOUT_ERROR'` | Request exceeded `timeoutMs` (populates `err.timeoutMs`). |
+| `OlaNetworkError` | `'OLA_NETWORK_ERROR'` | DNS failure, connection reset, offline network, or fetch rejection (non-abort). |
+
+## Error Properties
+
+Every `OlaMapsError` instance exposes structured diagnostic metadata safe for structured logging (`err.toJSON()`):
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `message` | `string` | Human-readable message with any `api_key`, `client_secret`, or `Bearer` tokens replaced with `[REDACTED]`. |
+| `code` | `string` | Machine-readable error code (e.g., `'OLA_RATE_LIMIT_ERROR'`). |
+| `status` | `number \| undefined` | HTTP status code, if an HTTP response was received. |
+| `requestId` | `string \| undefined` | The `X-Request-Id` UUID sent with the failed request. |
+| `correlationId` | `string \| undefined` | The `X-Correlation-Id` UUID sent with the failed request. |
+| `url` | `string \| undefined` | Redacted request URL (`api_key=REDACTED`). |
+| `body` | `unknown` | Parsed JSON or text response body returned by Ola Maps. |
+| `retryAfter` | `number \| undefined` | Parsed `Retry-After` delay in milliseconds (delta-seconds or HTTP-date). |
+| `cause` | `unknown` | Underlying native error, when applicable. |
+
+## Catching Specific Errors
+
+```ts
+import {
+  OlaMapsClient,
+  OlaMapsError,
+  OlaAuthError,
+  OlaRateLimitError,
+  OlaValidationError,
+  OlaTimeoutError,
+  OlaNetworkError,
+} from 'ola-map-sdk';
+
+try {
+  const results = await client.places.autocomplete('Indiranagar');
+} catch (err) {
+  if (err instanceof OlaRateLimitError) {
+    console.warn(`Rate limited. Retry after ${err.retryAfter ?? 1000}ms`, {
+      requestId: err.requestId,
+    });
+  } else if (err instanceof OlaAuthError) {
+    console.error('Check Ola Maps credentials:', err.status, err.message);
+  } else if (err instanceof OlaValidationError) {
+    console.error('Invalid SDK input:', err.message);
+  } else if (err instanceof OlaTimeoutError) {
+    console.warn(`Timed out after ${err.timeoutMs}ms`);
+  } else if (err instanceof OlaNetworkError) {
+    console.warn('Network error:', err.message);
+  } else if (err instanceof OlaMapsError) {
+    console.error('Ola Maps error:', err.toJSON());
+  } else {
+    throw err; // e.g., caller-initiated AbortError
+  }
+}
+```
+
+## Secret Redaction Utilities
+
+`ola-map-sdk` also exports its redaction and header-parsing helpers so you can sanitize custom logs consistently:
+
+```ts
+import { redactSecrets, redactUrl, parseRetryAfterMs } from 'ola-map-sdk';
+
+redactUrl('https://api.olamaps.io/places/v1/geocode?address=Delhi&api_key=super-secret');
+// -> "https://api.olamaps.io/places/v1/geocode?address=Delhi&api_key=REDACTED"
+
+redactSecrets('Authorization: Bearer eyJhbGciOi... failed');
+// -> "Authorization: Bearer [REDACTED] failed"
+
+parseRetryAfterMs('30');
+// -> 30000
+```
+
+<Callout type="info" title="AbortError behavior">
+When you explicitly cancel a request via `AbortController.abort()`, the SDK rethrows the abort signal's reason (or standard `AbortError`) immediately without retrying and without wrapping it in `OlaNetworkError`.
+</Callout>

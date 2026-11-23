@@ -1,0 +1,117 @@
+---
+title: Configuration & Transport
+description: Complete reference for OlaMapsClientConfig, retries with exponential backoff, in-memory LRU+TTL caching, in-flight GET deduplication, observability hooks, and RequestOptions.
+---
+
+`OlaMapsClient` wraps a zero-dependency `HttpTransport` layer built on standard Web `fetch`. You can tune timeouts, retry policies, response caching, request deduplication, custom `fetch` adapters, and logging hooks globally or per request.
+
+## `OlaMapsClientConfig` Reference
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `apiKey` | `string` | — | Ola Maps API key attached via the `api_key` query parameter. |
+| `clientId` | `string` | — | OAuth 2.0 Client ID (requires `clientSecret`, server-side only). |
+| `clientSecret` | `string` | — | OAuth 2.0 Client Secret (requires `clientId`, server-side only). |
+| `scope` | `string` | `'openid'` | OAuth 2.0 scope sent to the token endpoint. |
+| `tokenUrl` | `string` | `'https://api.olamaps.io/auth/v1/token'` | OAuth 2.0 token exchange URL. |
+| `tokenRefreshBufferMs` | `number` | `60000` | Proactively refresh OAuth tokens this many milliseconds before expiry. |
+| `accessToken` | `string \| (() => string \| Promise<string>)` | — | Static or async Bearer token provider. |
+| `baseUrl` | `string` | `'https://api.olamaps.io'` | Override API origin; set to a relative path like `'/api/ola-maps'` to activate **Proxy Mode**. |
+| `fetch` | `FetchLike` | `globalThis.fetch` | Custom `fetch` implementation (e.g., Next.js `fetch` with `next: { revalidate }`, mocks, or corporate proxies). |
+| `timeoutMs` | `number` | `15000` | Default per-attempt timeout in milliseconds. |
+| `retries` | `RetryConfig \| false` | `{ maxRetries: 2, baseDelayMs: 300, maxDelayMs: 10000 }` | Exponential backoff with jitter; pass `false` to disable retries. |
+| `cache` | `CacheConfig \| false` | `false` | Optional in-memory LRU + TTL cache for idempotent `GET` requests. |
+| `dedupe` | `boolean` | `true` | Deduplicate concurrent identical in-flight `GET` requests (when no `AbortSignal` is passed). |
+| `defaultHeaders` | `Record<string, string>` | `{}` | Extra HTTP headers merged onto every outgoing request. |
+| `onRequest` | `(ctx: RequestHookContext) => void` | — | Observability hook fired before each attempt (URLs are automatically redacted). |
+| `onResponse` | `(ctx: ResponseHookContext) => void` | — | Observability hook fired after each response or cache hit (URLs are automatically redacted). |
+| `suppressBrowserWarning` | `boolean` | `false` | Silence the runtime warning if `clientSecret` is instantiated in a browser context. |
+
+## Retries & Backoff (`RetryConfig`)
+
+By default, `ola-map-sdk` retries transient failures up to **2 times** using exponential backoff with **full jitter** (`[0.5x, 1.0x]` of `baseDelayMs * 2^attempt`, capped at `maxDelayMs`).
+
+When the server responds with `429 Too Many Requests` or includes a `Retry-After` header (delta-seconds or HTTP-date), the SDK honors `Retry-After` (capped by `maxDelayMs`).
+
+```ts
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  retries: {
+    maxRetries: 3,
+    baseDelayMs: 250,
+    maxDelayMs: 8_000,
+    retryOnStatuses: [408, 429, 500, 502, 503, 504],
+  },
+});
+
+// Or disable retries globally:
+const noRetryClient = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  retries: false,
+});
+```
+
+## Caching & In-Flight Deduplication
+
+- **In-flight `GET` deduplication (`dedupe: true`)**: Enabled by default. If 5 components simultaneously request the exact same `GET` endpoint (without custom `AbortSignal`), only 1 network request executes and all callers receive the resolved payload. Binary `ArrayBuffer` payloads are safely cloned via `.slice(0)`.
+- **In-memory LRU + TTL cache (`cache`)**: Opt-in for idempotent `GET` requests. Keys are canonicalized with sorted query parameters.
+
+```ts
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  cache: {
+    ttlMs: 60_000,   // Cache entries live for 60 seconds
+    maxEntries: 500, // Keep up to 500 entries in LRU order
+  },
+});
+
+// Clear the entire in-memory cache manually at any time
+client.clearCache();
+```
+
+## Observability Hooks (`onRequest` & `onResponse`)
+
+Instrument latency, status codes, retry attempts, and cache hit rates without ever leaking credentials — `ctx.url` is always passed through `redactUrl()` first.
+
+```ts
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  onRequest: ({ method, url, requestId, attempt }) => {
+    console.info(`[ola-maps] -> ${method} ${url} (req=${requestId}, attempt=${attempt})`);
+  },
+  onResponse: ({ method, url, status, durationMs, fromCache }) => {
+    console.info(
+      `[ola-maps] <- ${status} ${method} ${url} in ${durationMs}ms (cache=${fromCache})`,
+    );
+  },
+});
+```
+
+## Per-Request Options (`RequestOptions`)
+
+Every endpoint method accepts an optional trailing `requestOptions?: RequestOptions` parameter:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `signal` | `AbortSignal` | Cancel an in-flight request or retry wait immediately. |
+| `timeoutMs` | `number` | Override default timeout for this single call. |
+| `requestId` | `string` | Custom `X-Request-Id` header (defaults to a fresh RFC 4122 UUIDv4 per request). |
+| `correlationId` | `string` | Custom `X-Correlation-Id` header (defaults to a fresh UUIDv4). |
+| `headers` | `Record<string, string>` | Additional headers merged onto this request. |
+| `retries` | `number \| false` | Override retry count or pass `false` to disable retries for this call. |
+| `skipCache` | `boolean` | Bypass reading from (and writing to) the in-memory `GET` cache. |
+
+## Custom `fetch` (Next.js Server Caching & Testing)
+
+Pass any WHATWG-compatible `fetch` function. In Next.js Server Components, forward `next: { revalidate }` to leverage Next.js Data Cache:
+
+```ts
+const serverClient = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  fetch: (url, init) =>
+    fetch(url, {
+      ...init,
+      next: { revalidate: 300 },
+    }),
+});
+```

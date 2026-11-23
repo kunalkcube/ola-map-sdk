@@ -1,0 +1,103 @@
+---
+title: Quick Start
+description: Get started with ola-map-sdk v2.0 in two minutes — initialize the client, pass flexible coordinates, search places, and compute driving directions.
+---
+
+This guide takes you from zero to making authenticated Ola Maps requests for **Places Autocomplete**, **Directions**, **Elevation**, and **Street View** in under two minutes.
+
+## 1. Initialize the Client
+
+Pass either an API key string (v1 shorthand) or a full `OlaMapsClientConfig` object:
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+// Option A: v2 config object (recommended)
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  timeoutMs: 10_000,
+  retries: { maxRetries: 2, baseDelayMs: 300 },
+  cache: { ttlMs: 30_000, maxEntries: 200 },
+});
+
+// Option B: v1 shorthand (still fully supported)
+const simpleClient = new OlaMapsClient(process.env.OLA_MAPS_API_KEY!);
+```
+
+<Callout type="info" title="Building a browser or Next.js app?">
+Never bundle raw API keys or OAuth secrets in client-side code. Use **Proxy Mode** (`{ baseUrl: '/api/ola-maps' }`) paired with `ola-map-sdk/next`. See the [Next.js Proxy Guide](/docs/frameworks/nextjs).
+</Callout>
+
+## 2. Flexible Coordinate Inputs
+
+Every coordinate-accepting method in `ola-map-sdk` v2.0 accepts **all four** standard coordinate formats and automatically validates latitude (`-90..90`) and longitude (`-180..180`):
+
+| Format | Example | Notes |
+| --- | --- | --- |
+| `{ lat, lng }` | `{ lat: 12.931, lng: 77.616 }` | Standard JavaScript / Google / Leaflet shape |
+| `{ lat, lon }` | `{ lat: 12.931, lon: 77.616 }` | Backwards-compatible with v1.x |
+| `[lng, lat]` | `[77.616, 12.931]` | GeoJSON & MapLibre GL `[longitude, latitude]` tuple |
+| `"lat,lng"` | `"12.931,77.616"` | Wire-format string |
+
+Invalid coordinates (NaN, out-of-range latitude/longitude, or malformed strings) immediately throw `OlaValidationError` before any network request is made.
+
+## 3. Search Places & Compute Directions
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+});
+
+// 1. Place Autocomplete biased around Bengaluru
+const search = await client.places.autocomplete('Koramangala', {
+  location: { lat: 12.9352, lng: 77.6245 },
+  radius: 5000,
+});
+
+const topMatch = search.predictions[0];
+console.log('Top place:', topMatch?.description);
+
+// 2. Turn-by-turn Directions with live traffic metadata
+const route = await client.routing.getDirections(
+  { lat: 12.993103, lng: 77.543326 },
+  { lat: 12.972006, lng: 77.580085 },
+  { mode: 'driving', traffic_metadata: true, steps: true },
+);
+
+const leg = route.routes[0]?.legs[0];
+console.log(`Distance: ${leg?.readable_distance} | ETA: ${leg?.readable_duration}`);
+
+// 3. Elevation lookup
+const elev = await client.elevation.getElevation(12.972006, 77.580085);
+console.log('Elevation (m):', elev.results?.[0]?.elevation ?? elev.elevation);
+```
+
+## 4. Per-Request Cancellation & Overrides
+
+Every endpoint method accepts an optional trailing `RequestOptions` argument for `AbortSignal`, custom timeouts, custom `X-Request-Id` / `X-Correlation-Id`, retry overrides, or cache bypass:
+
+```ts
+const controller = new AbortController();
+
+const results = await client.places.geocode(
+  'Indiranagar, Bengaluru',
+  { language: 'en' },
+  {
+    signal: controller.signal,
+    timeoutMs: 5_000,
+    requestId: 'req-checkout-42',
+    skipCache: true,
+  },
+);
+```
+
+## Where to Go Next
+
+<Cards>
+  <Card title="Configuration & Transport" description="Tune retries, LRU caching, GET deduplication, custom fetch, and observability hooks." href="/docs/configuration" />
+  <Card title="Authentication Modes" description="Configure API Key, OAuth 2.0 client_credentials, Bearer tokens, or Proxy Mode." href="/docs/authentication" />
+  <Card title="React Hooks" description="Add debounced autocomplete and directions to React components." href="/docs/frameworks/react" />
+  <Card title="MapLibre GL Integration" description="Render interactive vector maps with 27 built-in styles and host-safe auth." href="/docs/frameworks/maplibre" />
+</Cards>

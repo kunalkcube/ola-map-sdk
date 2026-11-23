@@ -1,0 +1,134 @@
+---
+title: Routing API
+description: Complete reference for client.routing — getDirections, getDirectionsBasic, getDistanceMatrix, getDistanceMatrixBasic, routeOptimizer (max 25 locations), and browser/Edge-safe fleetPlanner.
+---
+
+Access all 6 Ola Maps Routing endpoints via `client.routing`. All coordinate parameters accept `{ lat, lng }`, `{ lat, lon }`, `[lng, lat]`, or `"lat,lng"`.
+
+## Method Summary
+
+| Method | HTTP & Path | Cap / Notes |
+| --- | --- | --- |
+| `getDirections(origin, destination, options?, reqOpts?)` | `POST /routing/v1/directions` | Full turn-by-turn directions with `mode` and `traffic_metadata`. |
+| `getDirectionsBasic(origin, destination, options?, reqOpts?)` | `POST /routing/v1/directions/basic` | Lightweight directions without traffic metadata or travel mode. |
+| `getDistanceMatrix(origins, destinations, options?, reqOpts?)` | `GET /routing/v1/distanceMatrix` | Many-to-many travel time & distance matrix with `mode`. |
+| `getDistanceMatrixBasic(origins, destinations, options?, reqOpts?)` | `GET /routing/v1/distanceMatrix/basic` | Basic distance/duration matrix. |
+| `routeOptimizer(locations, options?, reqOpts?)` | `POST /routing/v1/routeOptimizer` | **Max 25 locations** (validated locally). |
+| `fleetPlanner(inputData, strategy, options?, reqOpts?)` | `POST /routing/v1/fleetPlanner` | Uses standard Web `FormData` + `Blob` (works in Node, Browser, Edge). |
+
+---
+
+## `getDirections` & `getDirectionsBasic`
+
+Compute turn-by-turn routes, distance, ETA, encoded `overview_polyline`, and optional live traffic metadata.
+
+```ts
+const directions = await client.routing.getDirections(
+  { lat: 12.993103, lng: 77.543326 },
+  { lat: 12.972006, lng: 77.580085 },
+  {
+    mode: 'driving', // 'driving' | 'walking' | 'auto' | 'two_wheeler' | 'cycling'
+    alternatives: true,
+    steps: true,
+    overview: 'full',
+    language: 'en',
+    traffic_metadata: true,
+    waypoints: [{ lat: 12.982, lng: 77.561 }],
+  },
+);
+
+const route = directions.routes[0];
+const leg = route?.legs[0];
+console.log(leg?.readable_distance, leg?.readable_duration, route?.overview_polyline);
+```
+
+### Options (`DirectionsOptions`)
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `alternatives` | `boolean` | `false` | Return alternative routes when available. |
+| `steps` | `boolean` | `true` | Include step-by-step navigation instructions. |
+| `overview` | `'full' \| 'simplified' \| 'false'` | `'full'` | Granularity of `overview_polyline`. |
+| `language` | `string` | `'en'` | Language for turn-by-turn instructions. |
+| `traffic_metadata` | `boolean` | `false` | Include live traffic metadata (`getDirections` only). |
+| `mode` | `RoutingMode` | — | `'driving'`, `'walking'`, `'auto'`, `'two_wheeler'`, `'cycling'` (`getDirections` only). |
+| `waypoints` | `string \| CoordinateInput[]` | — | Intermediate stops (array or pipe-delimited string). |
+| `route_preference` | `string` | — | Optional routing preference hint. |
+
+---
+
+## `getDistanceMatrix` & `getDistanceMatrixBasic`
+
+Calculate travel distance and duration between multiple origins and multiple destinations in one request:
+
+```ts
+const matrix = await client.routing.getDistanceMatrix(
+  [
+    { lat: 12.993103, lng: 77.543326 },
+    { lat: 12.971599, lng: 77.594563 },
+  ],
+  [
+    { lat: 12.935193, lng: 77.624481 },
+    { lat: 12.927923, lng: 77.627108 },
+  ],
+  { mode: 'driving' },
+);
+
+for (const row of matrix.rows) {
+  for (const el of row.elements) {
+    console.log(el.status, el.distance, el.duration);
+  }
+}
+```
+
+---
+
+## `routeOptimizer`
+
+Solve multi-stop waypoint ordering (Travelling Salesman Problem) for up to **25 locations** (enforced locally with `OlaValidationError`):
+
+```ts
+const optimized = await client.routing.routeOptimizer(
+  [
+    { lat: 12.993103, lng: 77.543326 },
+    { lat: 12.972006, lng: 77.580085 },
+    { lat: 12.935193, lng: 77.624481 },
+    { lat: 12.927923, lng: 77.627108 },
+  ],
+  {
+    source: 'first',      // 'first' | 'any'
+    destination: 'last',  // 'last' | 'any'
+    round_trip: false,
+    mode: 'driving',
+    traffic_metadata: true,
+  },
+);
+
+console.log(optimized.waypoints);
+```
+
+---
+
+## `fleetPlanner`
+
+Optimize multi-vehicle, multi-package delivery schedules. In v2.0, `fleetPlanner` uses standard Web `FormData` + `Blob` so it works identically in Node.js, Browsers, and Edge Workers.
+
+`inputData` accepts:
+- Plain JSON object (`Record<string, unknown>`)
+- JSON string
+- `Blob` / `File`
+- `Uint8Array` (including Node `Buffer`)
+- `ArrayBuffer`
+
+```ts
+const plan = await client.routing.fleetPlanner(
+  {
+    vehicles: [{ id: 'van-1', start_location: { lat: 12.97, lng: 77.59 } }],
+    packages: [{ id: 'pkg-1', location: { lat: 12.93, lng: 77.62 } }],
+  },
+  'optimal', // 'optimal' | 'distance' | 'duration'
+  { filename: 'dispatch.json' },
+);
+
+console.log(plan.routes, plan.unassigned);
+```

@@ -1,0 +1,78 @@
+---
+title: Roads API
+description: Complete reference for client.roads — snapToRoad (max 50 points), nearestRoads (max 100 points), and speedLimits (max 50 points).
+---
+
+Access all 3 Ola Maps Roads endpoints via `client.roads` to clean raw GPS traces, find nearby road segments, and look up posted speed limits.
+
+## Method Summary
+
+| Method | HTTP & Path | Local Validation Cap |
+| --- | --- | --- |
+| `snapToRoad(points, enhancePathOrOptions?, reqOpts?)` | `GET /routing/v1/snapToRoad` | **1–50 points** |
+| `nearestRoads(points, mode, radiusOrOptions?, reqOpts?)` | `GET /routing/v1/nearestRoads` | **1–100 points** |
+| `speedLimits(points, snapStrategyOrOptions?, reqOpts?)` | `GET /routing/v1/speedLimits` | **1–50 points** |
+
+---
+
+## `snapToRoad`
+
+Snap noisy GPS breadcrumbs onto the actual road network. Optionally interpolate intermediate road geometry by enabling `enhancePath`.
+
+```ts
+const snapped = await client.roads.snapToRoad(
+  [
+    { lat: 12.9991, lng: 77.6732 },
+    { lat: 12.9955, lng: 77.6651 },
+    { lat: 12.9921, lng: 77.6584 },
+  ],
+  { enhancePath: true }, // or boolean shorthand: true
+);
+
+for (const pt of snapped.snapped_points) {
+  console.log(pt.location.lat, pt.location.lng, pt.original_index);
+}
+```
+
+- **Parameters**: `points: string | CoordinateInput[]` (max 50), `enhancePathOrOptions?: boolean | { enhancePath?: boolean }` (default `false`).
+
+---
+
+## `nearestRoads`
+
+Find the nearest road segment for up to **100** independent coordinates (unlike `snapToRoad`, points do not need to form a continuous path).
+
+```ts
+const nearest = await client.roads.nearestRoads(
+  '12.999,77.673|12.992,77.658',
+  'DRIVING', // 'DRIVING' | 'WALKING' | 'BICYCLING' | 'TRANSIT'
+  { radius: 500 }, // or numeric shorthand: 500
+);
+
+for (const road of nearest.results) {
+  console.log(road.lat, road.lng, road.distance);
+}
+```
+
+- **Allowed `mode` values** (validated locally): `'DRIVING'`, `'WALKING'`, `'BICYCLING'`, `'TRANSIT'`.
+- **Optional `radius`**: finite number in meters.
+
+---
+
+## `speedLimits`
+
+Retrieve posted speed limits along up to **50** GPS coordinates.
+
+```ts
+const limits = await client.roads.speedLimits(
+  [
+    { lat: 13.063, lng: 77.593 },
+    { lat: 13.064, lng: 77.594 },
+  ],
+  { snapStrategy: 'snaptoroad' }, // 'snaptoroad' | 'nearestroad'
+);
+
+console.log(limits.speed_limits, limits.snapped_points);
+```
+
+- **Allowed `snapStrategy` values** (validated locally, default `'snaptoroad'`): `'snaptoroad'`, `'nearestroad'`.

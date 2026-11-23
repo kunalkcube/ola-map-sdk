@@ -1,0 +1,37 @@
+---
+title: API Reference Overview
+description: Complete method matrix for all 7 Ola Maps SDK v2.0 endpoint modules — Places, Routing, Roads, Street View, Geofencing, Elevation, and Tiles & Static Maps.
+---
+
+`OlaMapsClient` exposes **7 strongly-typed endpoint modules** covering 40 Ola Maps API operations. Every method returns a typed `Promise`, validates coordinates and documented API caps locally, and accepts an optional trailing [`RequestOptions`](/docs/configuration#per-request-options-requestoptions) object.
+
+## Endpoint Matrix
+
+| Module | Methods | Key Capabilities & Local Validation Caps |
+| --- | --- | --- |
+| [**Places & Geocoding**](/docs/api/places) | 10 methods | Autocomplete, Geocode, Reverse Geocode, Place Details (+ Advanced), Nearby Search (+ Advanced, `limit: 1..50`, `layers`), Text Search, Address Validation, Place Photos |
+| [**Routing**](/docs/api/routing) | 6 methods | Turn-by-turn Directions (+ Basic), Distance Matrix (+ Basic), Route Optimizer (max `25` locations), Fleet Planner (Web `FormData` + `Blob`) |
+| [**Roads**](/docs/api/roads) | 3 methods | Snap to Road (max `50` points), Nearest Roads (max `100` points), Speed Limits (max `50` points) |
+| [**Street View**](/docs/api/street-view) | 3 methods | Bounding-box Coverage, Nearest Image ID, Panorama Metadata & Neighbors |
+| [**Geofencing**](/docs/api/geofencing) | 6 methods | Create, Get, Update, Delete, List (paginated), Check Point-in-Geofence Status |
+| [**Elevation**](/docs/api/elevation) | 2 methods | Single-point Elevation, Batch Elevation (max `25` locations) |
+| [**Tiles & Static Maps**](/docs/api/tiles) | 10 methods | Styles List, Style JSON, Vector TileJSON, Vector `.pbf`, Raster `.png`/`.jpg`, SDF Font Glyphs, Static Map (Center, BBox, Auto; `1..2048px`), 3D Buildings Tileset |
+
+## Shared Conventions Across All Methods
+
+1. **Flexible Coordinates**: Pass `{ lat, lng }`, `{ lat, lon }`, `[lng, lat]`, or `"lat,lng"` strings anywhere a `CoordinateInput` is accepted.
+2. **Pipe-Separated Lists**: Methods taking multiple coordinates (`waypoints`, `origins`, `destinations`, `locations`, `points`) accept either an array of `CoordinateInput[]` or a pipe-delimited string (`"12.93,77.61|12.97,77.59"`).
+3. **Fail-Fast Validation**: Out-of-range coordinates (`lat` outside `[-90, 90]`, `lng` outside `[-180, 180]`) or exceeded API caps throw `OlaValidationError` immediately without making a network request.
+4. **Per-Request Control**: Every method accepts an optional final `requestOptions?: RequestOptions` argument for `signal`, `timeoutMs`, `requestId`, `correlationId`, `headers`, `retries`, and `skipCache`.
+
+## Explore Modules
+
+<Cards>
+  <Card title="Places & Geocoding" description="Autocomplete, geocode, reverse geocode, details, nearby, text search, validation, and photos." href="/docs/api/places" />
+  <Card title="Routing" description="Directions with traffic, distance matrices, TSP route optimizer, and fleet planner." href="/docs/api/routing" />
+  <Card title="Roads" description="Snap GPS tracks to roads, find nearest road segments, and retrieve speed limits." href="/docs/api/roads" />
+  <Card title="Street View" description="Query Street View coverage polygons, nearest image IDs, and panorama metadata." href="/docs/api/street-view" />
+  <Card title="Geofencing" description="Full CRUD lifecycle for circle & polygon geofences plus live containment checks." href="/docs/api/geofencing" />
+  <Card title="Elevation" description="Query terrain altitude in meters for single coordinates or batches up to 25." href="/docs/api/elevation" />
+  <Card title="Tiles & Static Maps" description="Vector PBF, raster tiles, SDF glyphs, style JSON, static map images, and 3D tilesets." href="/docs/api/tiles" />
+</Cards>

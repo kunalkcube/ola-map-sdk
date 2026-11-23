@@ -1,0 +1,47 @@
+---
+title: Elevation API
+description: Complete reference for client.elevation — single-point getElevation and batch getMultiElevation (up to 25 coordinates per request).
+---
+
+Query terrain altitude (meters above sea level) via `client.elevation`.
+
+## Method Summary
+
+| Method | HTTP & Path | Local Validation Cap |
+| --- | --- | --- |
+| `getElevation(lat, lng, reqOpts?)` / `getElevation(coord, reqOpts?)` | `GET /places/v1/elevation` | 1 coordinate |
+| `getMultiElevation(locations, reqOpts?)` | `POST /places/v1/elevation` | **1–25 coordinates** |
+
+---
+
+## `getElevation`
+
+Fetch elevation for a single point. Accepts `(lat, lng)` numbers/strings or any `CoordinateInput`:
+
+```ts
+const e1 = await client.elevation.getElevation(12.93126, 77.61638);
+const e2 = await client.elevation.getElevation({ lat: 12.93126, lng: 77.61638 });
+const e3 = await client.elevation.getElevation([77.61638, 12.93126]);
+const e4 = await client.elevation.getElevation('12.93126,77.61638');
+
+console.log(e1.results?.[0]?.elevation ?? e1.elevation);
+```
+
+---
+
+## `getMultiElevation`
+
+Fetch terrain elevations for up to **25 coordinates** in a single batch `POST` call (enforced locally with `OlaValidationError`):
+
+```ts
+const batch = await client.elevation.getMultiElevation([
+  { lat: 12.93126, lng: 77.61638 },
+  { lat: 12.89731, lng: 77.65136 },
+  [77.59456, 12.9716],
+  '13.0827,80.2707',
+]);
+
+for (const item of batch.results) {
+  console.log(`${item.location.lat},${item.location.lng} => ${item.elevation}m`);
+}
+```

@@ -1,0 +1,39 @@
+---
+title: Security Best Practices
+description: How ola-map-sdk v2.0 protects your credentials — automatic secret redaction, host-safe MapLibre URL checks, SSRF-safe Next.js proxying, and browser runtime guards.
+---
+
+Mapping keys and OAuth client secrets are common targets for quota abuse if exposed in browser bundles, logs, or third-party requests. `ola-map-sdk` v2.0 builds credential safeguards directly into its transport, MapLibre helper, and Next.js proxy.
+
+## 1. Never Expose Credentials in Browser Bundles
+
+- **Use Proxy Mode for web apps**: Deploy [`createOlaMapsProxyHandler()`](/docs/frameworks/nextjs) in `app/api/ola-maps/[...path]/route.ts` and configure your browser client with `{ baseUrl: '/api/ola-maps' }`.
+- **Server-only OAuth 2.0**: Never place `clientSecret` in `NEXT_PUBLIC_*` or `VITE_*` variables. If `clientSecret` is detected in a browser environment (`window` + `document`), `AuthManager` emits a console warning automatically.
+
+## 2. SSRF & Open-Proxy Prevention (`ola-map-sdk/next`)
+
+`createOlaMapsProxyHandler()` blocks common proxy attacks by default:
+
+- **Strict prefix allowlist**: Only forwards requests matching `/places/v1/`, `/routing/v1/`, `/tiles/v1/`, `/tiles/vector/v1/`, `/sli/v1/streetview/`, and `/sli/streetview/`. Requests to any other path return `403`.
+- **Path traversal rejection**: Decodes and rejects paths containing `..`, `\`, `//`, `@`, or control characters (`\r`, `\n`, `\0`) with `400`.
+- **Client credential stripping**: Strips any incoming `api_key`, `client_secret`, or `access_token` query params before injecting your server credentials.
+- **Custom authorization**: Pass `authorize(request)` to require authenticated user sessions, check `Origin`/`Referer`, or integrate Redis/Upstash rate limiting.
+
+## 3. Host-Safe MapLibre `transformRequest`
+
+`getTransformRequest()` in `ola-map-sdk/maplibre` parses every MapLibre request URL via `new URL()` and validates `isOlaMapsHost(parsed.hostname)` (`olamaps.io` or `*.olamaps.io`).
+
+- Requests to third-party overlay servers, custom GeoJSON endpoints, or external sprite/font CDNs are returned **untouched** — your `api_key` or `Authorization` header never leaves Ola Maps domains.
+- Legacy `app.olamaps.io` URLs are rewritten to `api.olamaps.io` strictly by hostname, never via unsafe string replace.
+
+## 4. Automatic Secret Redaction in Errors & Logs
+
+Every `OlaMapsError` message, `error.url`, `error.toJSON()`, and `onRequest` / `onResponse` hook URL is sanitized automatically:
+
+- Query params `api_key`, `client_secret`, `access_token`, and `token` become `REDACTED`.
+- `Bearer <token>` headers in error messages become `Bearer [REDACTED]`.
+- The SDK never logs to `console.error` on failed API calls.
+
+## 5. Unique Request Tracing Headers
+
+Every request automatically carries a fresh RFC 4122 v4 `X-Request-Id` and `X-Correlation-Id` (using `crypto.randomUUID()`), making it easy to correlate suspicious traffic or debug issues with Ola Maps support without exposing credentials.

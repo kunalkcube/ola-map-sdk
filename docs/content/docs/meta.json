@@ -1,0 +1,17 @@
+{
+  "title": "Ola Map SDK v2.0",
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "installation",
+    "quick-start",
+    "configuration",
+    "authentication",
+    "error-handling",
+    "migration-v2",
+    "---Integration & Reference---",
+    "frameworks",
+    "api",
+    "guides"
+  ]
+}

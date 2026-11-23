@@ -1,0 +1,190 @@
+---
+title: Real-World Examples
+description: Integration patterns using ola-map-sdk v2.0 for Next.js location pickers with MapLibre, delivery ETA matrices, GPS track snapping, and Cloudflare Workers.
+---
+
+End-to-end integration examples using `ola-map-sdk` v2.0 across Next.js, React, MapLibre GL, Node.js, and Cloudflare Workers.
+
+## 1. Full-Stack Next.js Map + Autocomplete + Directions
+
+### Step A: Server Proxy (`app/api/ola-maps/[...path]/route.ts`)
+
+```ts
+import { createOlaMapsProxyHandler } from 'ola-map-sdk/next';
+
+export const { GET, POST, PUT, DELETE } = createOlaMapsProxyHandler({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  cacheControl: 'public, s-maxage=60, stale-while-revalidate=300',
+});
+```
+
+### Step B: Interactive Client Component (`components/RouteExplorer.tsx`)
+
+```tsx
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { getMapOptions } from 'ola-map-sdk/maplibre';
+import { OlaMapsProvider, useOlaAutocomplete, useOlaDirections } from 'ola-map-sdk/react';
+
+const ORIGIN = { lat: 12.9716, lng: 77.5946 };
+
+function RouteExplorerInner() {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const [query, setQuery] = useState('');
+  const [dest, setDest] = useState<{ lat: number; lng: number } | null>(null);
+
+  const { predictions } = useOlaAutocomplete(query, {
+    location: ORIGIN,
+    radius: 15_000,
+    debounceMs: 250,
+  });
+
+  const { routes } = useOlaDirections(ORIGIN, dest, {
+    mode: 'driving',
+    traffic_metadata: true,
+  });
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = new maplibregl.Map(
+      getMapOptions(
+        { proxyBaseUrl: '/api/ola-maps' },
+        {
+          container: mapRef.current,
+          style: 'default-light-standard',
+          center: [ORIGIN.lng, ORIGIN.lat],
+          zoom: 13,
+        },
+      ),
+    );
+    return () => map.remove();
+  }, []);
+
+  const leg = routes[0]?.legs[0];
+
+  return (
+    <div className="space-y-4">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Where to?"
+      />
+      <ul>
+        {predictions.map((p) => (
+          <li key={p.place_id}>
+            <button
+              type="button"
+              onClick={() => {
+                if (p.geometry?.location) setDest(p.geometry.location);
+                setQuery(p.description);
+              }}
+            >
+              {p.description}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {leg && (
+        <p>
+          ETA: <strong>{leg.readable_duration}</strong> ({leg.readable_distance})
+        </p>
+      )}
+      <div ref={mapRef} style={{ height: 420, width: '100%' }} />
+    </div>
+  );
+}
+
+export function RouteExplorer() {
+  return (
+    <OlaMapsProvider config={{ baseUrl: '/api/ola-maps' }}>
+      <RouteExplorerInner />
+    </OlaMapsProvider>
+  );
+}
+```
+
+---
+
+## 2. Nearest Delivery Rider Assignment (Distance Matrix)
+
+Pick the fastest available rider for an incoming customer order using a single `getDistanceMatrix` call:
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  clientId: process.env.OLA_CLIENT_ID!,
+  clientSecret: process.env.OLA_CLIENT_SECRET!,
+  cache: { ttlMs: 15_000, maxEntries: 500 },
+});
+
+const riders = [
+  { id: 'rider-1', pos: { lat: 12.9352, lng: 77.6245 } },
+  { id: 'rider-2', pos: { lat: 12.9716, lng: 77.5946 } },
+  { id: 'rider-3', pos: { lat: 12.9279, lng: 77.6271 } },
+];
+
+const customer = { lat: 12.956, lng: 77.64 };
+
+const matrix = await client.routing.getDistanceMatrix(
+  riders.map((r) => r.pos),
+  [customer],
+  { mode: 'two_wheeler' },
+);
+
+const ranked = riders
+  .map((rider, i) => ({
+    riderId: rider.id,
+    durationSec: matrix.rows[i]?.elements[0]?.duration ?? Infinity,
+    distanceMeters: matrix.rows[i]?.elements[0]?.distance ?? Infinity,
+  }))
+  .sort((a, b) => a.durationSec - b.durationSec);
+
+console.log('Closest rider:', ranked[0]);
+```
+
+---
+
+## 3. Clean Vehicle GPS Breadcrumbs + Check Speed Limits
+
+```ts
+const breadcrumbs = [
+  { lat: 13.0631, lng: 77.5932 },
+  { lat: 13.0638, lng: 77.5937 },
+  { lat: 13.0645, lng: 77.5941 },
+];
+
+const [snapped, limits] = await Promise.all([
+  client.roads.snapToRoad(breadcrumbs, { enhancePath: true }),
+  client.roads.speedLimits(breadcrumbs, { snapStrategy: 'snaptoroad' }),
+]);
+
+console.log('Snapped geometry points:', snapped.snapped_points.length);
+console.log('Speed limits:', limits.speed_limits);
+```
+
+---
+
+## 4. Cloudflare Workers / Edge Function
+
+Because `ola-map-sdk` has zero Node built-in imports, it runs natively inside Cloudflare Workers, Vercel Edge Functions, Deno Deploy, and Bun:
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+export interface Env {
+  OLA_MAPS_API_KEY: string;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const q = new URL(request.url).searchParams.get('q') ?? 'Bengaluru';
+    const client = new OlaMapsClient({ apiKey: env.OLA_MAPS_API_KEY });
+    const data = await client.places.autocomplete(q);
+    return Response.json(data);
+  },
+};
+```

@@ -1,0 +1,14 @@
+{
+  "title": "API Reference",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "places",
+    "routing",
+    "roads",
+    "street-view",
+    "geofencing",
+    "elevation",
+    "tiles"
+  ]
+}

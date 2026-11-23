@@ -1,0 +1,55 @@
+---
+title: Frequently Asked Questions (FAQ)
+description: Direct answers to common questions about ola-map-sdk v2.0 — TypeScript support, Next.js App Router, OAuth 2.0, MapLibre GL, coordinate formats, Street View, and v1 migration.
+---
+
+Quick, direct answers to the most common engineering questions about `ola-map-sdk` v2.0.
+
+## Does `ola-map-sdk` work with TypeScript?
+
+Yes. `ola-map-sdk` v2.0 is written in strict TypeScript and ships dual ESM + CJS builds with `.d.ts` and `.d.cts` declarations for all four entrypoints (`ola-map-sdk`, `ola-map-sdk/next`, `ola-map-sdk/react`, and `ola-map-sdk/maplibre`). Plain JavaScript projects also get full VS Code IntelliSense automatically.
+
+## Does `ola-map-sdk` have any runtime dependencies?
+
+No. `ola-map-sdk` v2.0 has **zero runtime dependencies**. It uses standard Web APIs (`fetch`, `URLSearchParams`, `FormData`, `Blob`, `AbortController`, and Web Crypto), making it lightweight and compatible with Node.js 18+, modern browsers, Next.js Edge, Cloudflare Workers, Bun, and Deno.
+
+## How do I hide my Ola Maps API key in Next.js or React?
+
+Use **Proxy Mode** with `ola-map-sdk/next`. Export `{ GET, POST, PUT, DELETE } = createOlaMapsProxyHandler({ apiKey: process.env.OLA_MAPS_API_KEY! })` in `app/api/ola-maps/[...path]/route.ts`, then instantiate `new OlaMapsClient({ baseUrl: '/api/ola-maps' })` or `<OlaMapsProvider config={{ baseUrl: '/api/ola-maps' }}>` on the client. Your credentials never enter the browser bundle.
+
+## Does `ola-map-sdk` support Ola Maps OAuth 2.0 (`client_credentials`)?
+
+Yes. Pass `{ clientId, clientSecret }` to `new OlaMapsClient(...)` (or `createOlaMapsProxyHandler(...)`) on the server. The SDK exchanges tokens at `POST https://api.olamaps.io/auth/v1/token`, deduplicates concurrent token requests, refreshes tokens proactively 60 seconds before expiry, and retries once automatically on HTTP `401`.
+
+## What coordinate formats does `ola-map-sdk` accept?
+
+Every coordinate parameter accepts all four common formats:
+- `{ lat, lng }`
+- `{ lat, lon }`
+- `[lng, lat]` (GeoJSON / MapLibre order)
+- `"lat,lng"` string
+
+All coordinates are validated locally (`lat` in `[-90, 90]`, `lng` in `[-180, 180]`) before any HTTP call is sent.
+
+## Does `ola-map-sdk` support Ola Maps Street View?
+
+Yes. v2.0 includes the `client.streetView` module with `getCoverage(bbox)`, `getImageId(lat, lon, options?)`, and `getMetadata(imageId)`.
+
+## How do I render an interactive Ola Map with MapLibre GL?
+
+Import `getMapOptions` from `ola-map-sdk/maplibre` (or call `client.getMapOptions()`) and pass the result directly into `new maplibregl.Map(...)`. Its `transformRequest` strictly restricts credential injection to `*.olamaps.io` domains and supports `proxyBaseUrl` so browser maps need zero API keys.
+
+## How does `ola-map-sdk` handle rate limits (`429`) and transient errors?
+
+By default, `HttpTransport` retries `408`, `429`, `500`, `502`, `503`, `504`, timeouts, and network failures up to 2 times with exponential backoff and full jitter. When Ola Maps returns a `Retry-After` header, the SDK honors it automatically. If retries are exhausted on `429`, it throws `OlaRateLimitError` with `err.retryAfter` populated in milliseconds.
+
+## Is `ola-map-sdk` v2.0 compatible with v1.x code?
+
+Yes for most usage: `new OlaMapsClient('YOUR_API_KEY')` and `{ lat, lon }` objects continue to work. Review the [v1 to v2 Migration Guide](/docs/migration-v2) for the targeted changes (`Node 18+`, CommonJS named import, `fleetPlanner` Web `Blob`/JSON input, and typed `OlaMapsError` classes).
+
+## Is there an `llms.txt` endpoint for AI coding assistants?
+
+Yes! Point Cursor, Claude, ChatGPT, or Windsurf to:
+- [`/llms.txt`](/llms.txt) — concise documentation index
+- [`/llms-full.txt`](/llms-full.txt) — complete documentation in one Markdown file
+- Append `.md` to any doc URL (e.g., `/docs/api/places.md`) for clean per-page Markdown.

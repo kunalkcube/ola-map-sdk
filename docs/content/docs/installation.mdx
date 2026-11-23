@@ -1,0 +1,100 @@
+---
+title: Installation
+description: Install ola-map-sdk in Node.js, Next.js, React, Vite, Cloudflare Workers, Bun, or Deno. Zero runtime dependencies with optional peer adapters.
+---
+
+Install `ola-map-sdk` using your package manager. The core package has **zero runtime dependencies** and ships both ESM and CommonJS bundles alongside TypeScript declarations.
+
+## Package Manager
+
+```package-install
+ola-map-sdk
+```
+
+Or install explicitly:
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+```bash
+npm install ola-map-sdk
+```
+  </Tab>
+  <Tab value="pnpm">
+```bash
+pnpm add ola-map-sdk
+```
+  </Tab>
+  <Tab value="yarn">
+```bash
+yarn add ola-map-sdk
+```
+  </Tab>
+  <Tab value="bun">
+```bash
+bun add ola-map-sdk
+```
+  </Tab>
+</Tabs>
+
+## Runtime Requirements
+
+| Environment | Minimum Version | Notes |
+| --- | --- | --- |
+| **Node.js** | `>= 18.0.0` | Uses native `fetch`, `FormData`, `Blob`, `AbortController`, and `crypto.randomUUID()`. |
+| **Browsers** | Modern evergreen | Works in Vite, Next.js, Remix, Astro, and vanilla ES modules. Use **Proxy Mode** in production browsers. |
+| **Edge Runtimes** | Cloudflare Workers, Vercel Edge, Deno, Bun | Web-standard compatible with zero Node built-in (`fs`, `http`) imports. |
+| **TypeScript** | `>= 5.0` recommended | Supports `moduleResolution`: `"bundler"`, `"node16"`, and `"nodenext"`. |
+
+## Optional Peer Dependencies
+
+Peer dependencies are optional — install them only when using the matching subpath export:
+
+| Subpath Export | Optional Peer Dependency | Purpose |
+| --- | --- | --- |
+| `ola-map-sdk` | *None* | Core client, all 7 API modules, OAuth 2.0, errors, coordinate utilities |
+| `ola-map-sdk/maplibre` | `maplibre-gl >= 3.0.0` | Interactive vector maps, style switcher, host-safe `transformRequest` |
+| `ola-map-sdk/next` | `next >= 13.0.0` | App Router SSRF-safe API proxy route handler |
+| `ola-map-sdk/react` | `react >= 18.0.0` | `<OlaMapsProvider>` and debounced, abort-safe React hooks |
+
+```bash
+# Optional: install MapLibre GL for interactive map rendering
+npm install maplibre-gl
+```
+
+## Importing the SDK
+
+`ola-map-sdk` supports both ESM (`import`) and CommonJS (`require`):
+
+<Tabs items={['ESM / TypeScript', 'CommonJS']}>
+  <Tab value="ESM / TypeScript">
+```ts
+import OlaMapsClient from 'ola-map-sdk';
+// Named import is also available:
+import { OlaMapsClient, OlaRateLimitError } from 'ola-map-sdk';
+```
+  </Tab>
+  <Tab value="CommonJS">
+```js
+const { OlaMapsClient, OlaRateLimitError } = require('ola-map-sdk');
+// Default export via interop:
+const OlaMapsClientDefault = require('ola-map-sdk').default;
+```
+  </Tab>
+</Tabs>
+
+<Callout type="warn" title="CommonJS Upgrade Note">
+In v1.x, `const OlaMapsClient = require('ola-map-sdk')` returned the class directly. In v2.0, use destructuring (`const { OlaMapsClient } = require('ola-map-sdk')`) or `.default`. See the [v1 to v2 Migration Guide](/docs/migration-v2).
+</Callout>
+
+## Verify Your Setup
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+});
+
+console.log('Auth mode:', client.authMode); // "apiKey"
+console.log('Base URL:', client.baseUrl);   // "https://api.olamaps.io"
+```

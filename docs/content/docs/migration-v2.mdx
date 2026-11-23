@@ -1,0 +1,96 @@
+---
+title: Migrating from v1.x to v2.0
+description: Upgrade guide from ola-map-sdk v1.x to v2.0 covering Node 18+, CommonJS imports, fleetPlanner input changes, fail-fast validation, and typed errors.
+---
+
+`ola-map-sdk` v2.0 is a TypeScript rewrite with zero runtime dependencies. Most v1.x code — including `new OlaMapsClient('YOUR_API_KEY')` and `{ lat, lon }` coordinates — continues to work, with a few targeted breaking changes for security and cross-runtime support.
+
+## Quick Upgrade Checklist
+
+- [ ] Upgrade runtime to **Node.js 18+** (or pass a custom `fetch` in older runtimes).
+- [ ] Update CommonJS imports from `require('ola-map-sdk')` to `const { OlaMapsClient } = require('ola-map-sdk')`.
+- [ ] Update `fleetPlanner` callers that passed local file paths to pass a JSON object, `Buffer`/`Uint8Array`, or `Blob`.
+- [ ] Ensure `getStaticMapAuto` always includes at least one `marker` or `path`.
+- [ ] Migrate `catch (err)` blocks to inspect typed `OlaMapsError` subclasses instead of `axios` error shapes.
+
+## Breaking Changes in Detail
+
+### 1. Node.js 18+ Required (Zero Dependencies)
+
+`axios`, `uuid`, and `form-data` have been removed. `ola-map-sdk` now relies on standard Web APIs (`fetch`, `FormData`, `Blob`, `AbortController`, `crypto.randomUUID()`).
+
+### 2. CommonJS Named Export
+
+<Tabs items={['v1.x (Before)', 'v2.0 (After)']}>
+  <Tab value="v1.x (Before)">
+```js
+const OlaMapsClient = require('ola-map-sdk');
+const client = new OlaMapsClient('YOUR_API_KEY');
+```
+  </Tab>
+  <Tab value="v2.0 (After)">
+```js
+const { OlaMapsClient } = require('ola-map-sdk');
+// or: const OlaMapsClient = require('ola-map-sdk').default;
+
+const client = new OlaMapsClient('YOUR_API_KEY');
+```
+  </Tab>
+</Tabs>
+
+ESM default imports (`import OlaMapsClient from 'ola-map-sdk'`) and named imports (`import { OlaMapsClient } from 'ola-map-sdk'`) both work unchanged.
+
+### 3. `fleetPlanner` No Longer Reads Local Disk Paths
+
+To make `ola-map-sdk` compatible with browsers, Next.js Edge, and Cloudflare Workers, `require('fs')` was removed from `fleetPlanner`. Pass a plain object, JSON string, `Blob`, `Uint8Array`, or `ArrayBuffer`:
+
+<Tabs items={['v1.x (Before)', 'v2.0 (After)']}>
+  <Tab value="v1.x (Before)">
+```js
+await client.routing.fleetPlanner('./fleet-input.json', 'optimal');
+```
+  </Tab>
+  <Tab value="v2.0 (After)">
+```ts
+import { readFile } from 'node:fs/promises';
+
+// Pass a plain object directly (works in all runtimes)
+await client.routing.fleetPlanner({ packages: [], vehicles: [] }, 'optimal');
+
+// Or read a file on Node.js and pass the buffer
+const bytes = await readFile('./fleet-input.json');
+await client.routing.fleetPlanner(bytes, 'optimal', { filename: 'fleet-input.json' });
+```
+  </Tab>
+</Tabs>
+
+### 4. Fail-Fast Local Validation Caps
+
+v2.0 enforces documented Ola Maps API caps locally so invalid payloads fail immediately with `OlaValidationError` instead of burning API quota:
+
+- `places.nearbySearch` / `nearbySearchAdvanced`: `options.limit` must be `1..50`.
+- `routing.routeOptimizer`: max `25` locations.
+- `roads.snapToRoad`: max `50` points.
+- `roads.nearestRoads`: max `100` points.
+- `roads.speedLimits`: max `50` points.
+- `elevation.getMultiElevation`: max `25` locations.
+- `tiles.getStaticMapAuto`: requires at least one `marker` or `path` in `options`.
+- `tiles.getStaticMapByCenter` / `ByBBox` / `Auto`: `width` and `height` must be `1..2048`.
+
+### 5. Typed Errors (No Axios Error Shape, No `console.error`)
+
+v1.x logged errors to `console.error` and threw raw `axios` errors (`err.response.status`). v2.0 never calls `console.error` and throws structured `OlaMapsError` subclasses:
+
+```ts
+try {
+  await client.places.geocode('Bengaluru');
+} catch (err) {
+  if (err instanceof OlaMapsError) {
+    console.log(err.status, err.code, err.body, err.requestId);
+  }
+}
+```
+
+### 6. Host-Safe MapLibre `transformRequest`
+
+`client.getTransformRequest()` now parses URLs with `new URL()` and **only** attaches credentials or rewrites `app.olamaps.io` → `api.olamaps.io` for `*.olamaps.io` hostnames. Third-party overlay tiles, fonts, or GeoJSON sources will never receive your `api_key`.

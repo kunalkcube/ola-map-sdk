@@ -1,0 +1,106 @@
+---
+title: Authentication
+description: Configure Ola Maps authentication using API Key, OAuth 2.0 client_credentials with automatic token refresh, pre-issued Bearer tokens, or browser-safe Proxy Mode.
+---
+
+`ola-map-sdk` v2.0 supports **four authentication modes**, automatically detected from your configuration object and exposed via `client.authMode`:
+
+1. **`'apiKey'`** — Simple Ola Maps API key passed via the `api_key` query parameter.
+2. **`'oauth'`** — Server-side OAuth 2.0 `client_credentials` flow with automatic token caching, single-flight deduplication, proactive refresh, and automatic `401` retry.
+3. **`'accessToken'`** — Pre-issued static or async Bearer token provider.
+4. **`'proxy'`** — Credential-free browser client pointing at your own server proxy (such as `ola-map-sdk/next`).
+
+<Callout type="info" title="Auth Precedence">
+If multiple credentials are provided, `AuthManager` resolves mode in order: **OAuth 2.0 (`clientId` + `clientSecret`) → `accessToken` → `apiKey` → `proxy` (custom `baseUrl`)**. Passing only one of `clientId` or `clientSecret` throws `OlaValidationError`.
+</Callout>
+
+## 1. API Key (`apiKey`)
+
+The fastest way to start on backend services or scripts. Obtain an API key from the [Ola Maps Developer Portal](https://maps.olakrutrim.com/).
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+// Config object
+const client = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+});
+
+// Or v1 string shorthand
+const shorthand = new OlaMapsClient(process.env.OLA_MAPS_API_KEY!);
+
+console.log(client.authMode); // 'apiKey'
+```
+
+## 2. OAuth 2.0 (`client_credentials`, Server-Side)
+
+Recommended for server-to-server workloads using OAuth 2.0 credentials. `ola-map-sdk` automatically:
+- Exchanges `client_id` + `client_secret` at `POST https://api.olamaps.io/auth/v1/token` (`application/x-www-form-urlencoded`, `grant_type=client_credentials`).
+- Deduplicates concurrent token exchanges (single-flight) so parallel requests never trigger redundant token fetches.
+- Proactively refreshes tokens `tokenRefreshBufferMs` (default `60_000` ms) before expiry.
+- Automatically invalidates the cached token and retries **once** if an API call returns `401 Unauthorized`.
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  clientId: process.env.OLA_CLIENT_ID!,
+  clientSecret: process.env.OLA_CLIENT_SECRET!,
+  scope: 'openid',               // default
+  tokenRefreshBufferMs: 60_000,  // refresh 60s before expiry
+});
+
+// Inspect or manually force-refresh the Bearer token if needed
+const token = await client.getAccessToken();
+const freshToken = await client.getAccessToken(true);
+```
+
+<Callout type="warn" title="Never ship clientSecret to browsers">
+If `clientSecret` is instantiated in a browser (`window` + `document` present), `ola-map-sdk` logs a security warning. Always keep OAuth credentials strictly on your server or inside `createOlaMapsProxyHandler()` from `ola-map-sdk/next`.
+</Callout>
+
+## 3. Pre-Issued Bearer Token (`accessToken`)
+
+If your backend or token broker already mints Ola Maps Bearer tokens, supply either a static string or an async token provider function:
+
+```ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  accessToken: async () => {
+    const res = await fetch('/api/internal/ola-token');
+    const { access_token } = await res.json();
+    return access_token;
+  },
+});
+```
+
+## 4. Proxy Mode (Recommended for Browsers, React & Next.js)
+
+In browser apps, never expose raw API keys in `NEXT_PUBLIC_*` or `VITE_*` variables if you want full control over quotas and authorization. Instead, point the client at your own backend proxy endpoint:
+
+```ts
+// Browser / React Client Component — ZERO secrets in the bundle!
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({
+  baseUrl: '/api/ola-maps',
+});
+
+console.log(client.authMode); // 'proxy'
+
+// All SDK methods work identically
+const places = await client.places.autocomplete('Bengaluru');
+```
+
+Pair this with the built-in Next.js handler in `app/api/ola-maps/[...path]/route.ts`:
+
+```ts
+import { createOlaMapsProxyHandler } from 'ola-map-sdk/next';
+
+export const { GET, POST, PUT, DELETE } = createOlaMapsProxyHandler({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+});
+```
+
+See the [Next.js Proxy Guide](/docs/frameworks/nextjs) and [Security Guide](/docs/guides/security) for authorization hooks, SSRF allowlists, and MapLibre proxy mode.

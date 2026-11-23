@@ -1,0 +1,9 @@
+{
+  "title": "Frameworks & Maps",
+  "defaultOpen": true,
+  "pages": [
+    "nextjs",
+    "react",
+    "maplibre"
+  ]
+}

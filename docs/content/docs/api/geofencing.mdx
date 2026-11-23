@@ -1,0 +1,97 @@
+---
+title: Geofencing API
+description: Complete reference for client.geofencing — create, update, getById, deleteById, list, and checkStatus for circle and polygon geofences.
+---
+
+Manage virtual geographic perimeters (`circle` or `polygon`) and evaluate live point-in-geofence status via `client.geofencing`.
+
+## Method Summary
+
+| Method | HTTP & Path | Returns |
+| --- | --- | --- |
+| `create(geofenceData, reqOpts?)` | `POST /places/v1/geofence` | `Promise<GeofenceRecord>` |
+| `update(id, geofenceData, reqOpts?)` | `PUT /places/v1/geofence/:id` | `Promise<GeofenceRecord>` |
+| `getById(id, reqOpts?)` | `GET /places/v1/geofence/:id` | `Promise<GeofenceRecord>` |
+| `deleteById(id, reqOpts?)` | `DELETE /places/v1/geofence/:id` | `Promise<Record<string, unknown>>` |
+| `list(projectId, page?, size?, reqOpts?)` | `GET /places/v1/geofences` | `Promise<GeofenceListResponse>` |
+| `checkStatus(geofenceId, coordinates, reqOpts?)` | `GET /places/v1/geofence/status` | `Promise<GeofenceStatusResponse>` |
+
+---
+
+## `create`
+
+Create a circular or polygonal geofence associated with your `projectId`:
+
+```ts
+// Circular geofence
+const circleFence = await client.geofencing.create({
+  name: 'Koramangala Warehouse',
+  type: 'circle',
+  coordinates: [[12.93126, 77.61638]],
+  radius: 250, // meters
+  status: 'active',
+  projectId: 'my-project-id',
+});
+
+// Polygon geofence
+const polygonFence = await client.geofencing.create({
+  name: 'Delivery Zone A',
+  type: 'polygon',
+  coordinates: [
+    [
+      [77.61, 12.93],
+      [77.63, 12.93],
+      [77.63, 12.95],
+      [77.61, 12.95],
+      [77.61, 12.93],
+    ],
+  ],
+  status: 'active',
+  projectId: 'my-project-id',
+});
+```
+
+---
+
+## `getById`, `update`, and `deleteById`
+
+```ts
+// Read
+const fence = await client.geofencing.getById(circleFence.id);
+
+// Update (partial payload)
+const updated = await client.geofencing.update(circleFence.id, {
+  name: 'Koramangala Hub (Expanded)',
+  radius: 500,
+  status: 'active',
+});
+
+// Delete
+await client.geofencing.deleteById(circleFence.id);
+```
+
+---
+
+## `list`
+
+List geofences belonging to a project with pagination (`page` defaults to `1`, `size` defaults to `10`):
+
+```ts
+const page1 = await client.geofencing.list('my-project-id', 1, 20);
+console.log(page1.geofences ?? page1.data, page1.total);
+```
+
+---
+
+## `checkStatus`
+
+Test whether a given coordinate lies inside a geofence. Accepts any `CoordinateInput` (`{ lat, lng }`, `{ lat, lon }`, `[lng, lat]`, or `"lat,lng"`):
+
+```ts
+const status = await client.geofencing.checkStatus(circleFence.id, {
+  lat: 12.9315,
+  lng: 77.6165,
+});
+
+console.log('Inside geofence?', status.isInside, status.status);
+```

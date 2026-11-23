@@ -1,0 +1,173 @@
+---
+title: Places & Geocoding API
+description: Complete reference for client.places — autocomplete, geocode, reverseGeocode, placeDetails, placeDetailsAdvanced, nearbySearch, nearbySearchAdvanced, textSearch, addressValidation, and photo.
+---
+
+Access all 10 Ola Maps Places & Geocoding endpoints via `client.places`.
+
+## Method Summary
+
+| Method | HTTP & Path | Returns |
+| --- | --- | --- |
+| `autocomplete(input, options?, reqOpts?)` | `GET /places/v1/autocomplete` | `Promise<AutocompleteResponse>` |
+| `geocode(address, languageOrOptions?, reqOpts?)` | `GET /places/v1/geocode` | `Promise<GeocodeResponse>` |
+| `reverseGeocode(lat, lng, ...)` / `reverseGeocode(coord, ...)` | `GET /places/v1/reverse-geocode` | `Promise<ReverseGeocodeResponse>` |
+| `placeDetails(placeId, language?, reqOpts?)` | `GET /places/v1/details` | `Promise<PlaceDetailsResponse>` |
+| `placeDetailsAdvanced(placeId, language?, reqOpts?)` | `GET /places/v1/details/advanced` | `Promise<PlaceDetailsResponse>` |
+| `nearbySearch(location, options?, reqOpts?)` | `GET /places/v1/nearbysearch` | `Promise<NearbySearchResponse>` |
+| `nearbySearchAdvanced(location, options?, reqOpts?)` | `GET /places/v1/nearbysearch/advanced` | `Promise<NearbySearchResponse>` |
+| `textSearch(input, options?, reqOpts?)` | `GET /places/v1/textsearch` | `Promise<TextSearchResponse>` |
+| `addressValidation(address, reqOpts?)` | `GET /places/v1/addressvalidation` | `Promise<AddressValidationResponse>` |
+| `photo(photoReference, reqOpts?)` | `GET /places/v1/photo` | `Promise<PlacePhotoResponse>` |
+
+---
+
+## `autocomplete`
+
+Suggest places and addresses as a user types.
+
+```ts
+const res = await client.places.autocomplete('Koramangala', {
+  location: { lat: 12.9352, lng: 77.6245 },
+  radius: 5000,
+  strictbounds: false,
+  language: 'en',
+  types: 'establishment',
+});
+
+for (const p of res.predictions) {
+  console.log(p.place_id, p.description, p.geometry?.location);
+}
+```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `location` | `CoordinateInput` | Bias predictions near this coordinate (`{ lat, lng }`, `{ lat, lon }`, `[lng, lat]`, `"lat,lng"`). |
+| `radius` | `number` | Search radius around `location` in meters. |
+| `strictbounds` | `boolean` | When `true`, strictly restrict predictions to the `location` + `radius` circle. |
+| `language` | `string` | Response language code (e.g. `'en'`, `'hi'`). |
+| `types` | `string` | Comma-separated place types filter. |
+
+---
+
+## `geocode`
+
+Convert a street address or landmark into latitude/longitude coordinates.
+
+```ts
+// Pass an options object
+const res = await client.places.geocode('Taj Mahal, Agra', {
+  language: 'en',
+  bounds: '27.10,77.95|27.25,78.10',
+});
+
+// Or shorthand language string
+const simple = await client.places.geocode('India Gate, New Delhi', 'en');
+
+console.log(res.geocodingResults[0]?.geometry.location);
+```
+
+---
+
+## `reverseGeocode`
+
+Convert coordinates into human-readable addresses. Supports both `(lat, lng)` arguments (numbers or numeric strings) and a single coordinate object/tuple:
+
+```ts
+// Numeric or string lat/lng pair
+const r1 = await client.places.reverseGeocode(12.93126, 77.61638, { language: 'en' });
+
+// Object or GeoJSON tuple
+const r2 = await client.places.reverseGeocode({ lat: 12.93126, lng: 77.61638 });
+const r3 = await client.places.reverseGeocode([77.61638, 12.93126], 'en');
+
+console.log(r1.results[0]?.formatted_address);
+```
+
+---
+
+## `placeDetails` & `placeDetailsAdvanced`
+
+Fetch full metadata (address components, phone numbers, opening hours, photos, ratings, reviews) for a `place_id`:
+
+```ts
+const basic = await client.places.placeDetails('ola-platform:5000039498427', 'en');
+const rich = await client.places.placeDetailsAdvanced('ola-platform:5000039498427', 'en');
+
+console.log(rich.result.name, rich.result.opening_hours?.open_now);
+```
+
+---
+
+## `nearbySearch` & `nearbySearchAdvanced`
+
+Find nearby venues, restaurants, ATMs, or POIs around a coordinate. Both methods enforce `options.limit` within **`1..50`** locally.
+
+```ts
+const nearby = await client.places.nearbySearch(
+  { lat: 12.9352, lng: 77.6245 },
+  {
+    layers: 'venue',
+    types: 'cafe',
+    radius: 1500,
+    rankBy: 'distance',
+    limit: 20,
+    withCentroid: true,
+    language: 'en',
+  },
+);
+
+const advanced = await client.places.nearbySearchAdvanced('12.9352,77.6245', {
+  layers: 'venue',
+  types: 'restaurant',
+  rankBy: 'popular',
+  limit: 25,
+});
+```
+
+| Option | Type | Constraints / Notes |
+| --- | --- | --- |
+| `layers` | `string` | Optional search layer filter (e.g. `'venue'`). |
+| `types` | `string` | POI type(s) such as `'restaurant'`, `'cafe'`, `'hospital'`. |
+| `language` | `string` | Preferred language code. |
+| `radius` | `number` | Search radius in meters. |
+| `withCentroid` | `boolean` | Include centroid data in results. |
+| `rankBy` | `'popular' \| 'distance'` | Result ranking strategy. |
+| `limit` | `number` | **Validated `1..50`** (throws `OlaValidationError` if out of range). |
+
+---
+
+## `textSearch`
+
+Free-form natural-language POI search (e.g., `"Cafes in Indiranagar"`):
+
+```ts
+const res = await client.places.textSearch('Specialty coffee in Indiranagar', {
+  location: { lat: 12.9784, lng: 77.6408 },
+  radius: 3000,
+  types: 'cafe',
+  size: 10,
+});
+```
+
+---
+
+## `addressValidation`
+
+Validate and normalize an unstructured postal address:
+
+```ts
+const validation = await client.places.addressValidation('7, Lok Kalyan Marg, New Delhi');
+console.log(validation.result?.validated, validation.result?.validated_address);
+```
+
+---
+
+## `photo`
+
+Retrieve a place photo URI from a `photo_reference` returned by Place Details:
+
+```ts
+const photo = await client.places.photo('photo_reference_id');
+console.log(photo.photoUri ?? photo.photos?.[0]?.photoUri);
+```

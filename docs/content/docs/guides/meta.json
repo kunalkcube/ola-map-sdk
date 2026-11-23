@@ -1,0 +1,9 @@
+{
+  "title": "Production Guides",
+  "defaultOpen": true,
+  "pages": [
+    "examples",
+    "security",
+    "faq"
+  ]
+}

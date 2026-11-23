@@ -1,0 +1,79 @@
+---
+title: Street View API
+description: New in v2.0 — Complete reference for client.streetView covering coverage bounding boxes, nearest imageId lookup, and panoramic image metadata with neighbor links.
+---
+
+New in `ola-map-sdk` v2.0! Access all 3 **Ola Maps Street View** endpoints via `client.streetView` to discover street-level imagery coverage, locate the nearest panorama `imageId`, and retrieve panorama URLs, bearings, and neighbor graph links.
+
+## Method Summary
+
+| Method | HTTP & Path | Returns |
+| --- | --- | --- |
+| `getCoverage(bbox, reqOpts?)` | `GET /sli/v1/streetview/coverage` | `Promise<StreetViewCoverageResponse>` |
+| `getImageId(lat, lon, options?, reqOpts?)` / `getImageId(coord, ...)` | `GET /sli/streetview/imageId` | `Promise<StreetViewImageIdResponse>` |
+| `getMetadata(imageId, reqOpts?)` | `GET /sli/streetview/metadata` | `Promise<StreetViewMetadataResponse>` |
+
+---
+
+## `getCoverage`
+
+Fetch Street View coverage geometry inside a geographic bounding box. Accepts either `{ xMin, yMin, xMax, yMax }` or the intuitive alias `{ minLng, minLat, maxLng, maxLat }`.
+
+```ts
+// Standard xMin/yMin/xMax/yMax
+const coverage = await client.streetView.getCoverage({
+  xMin: 77.611,
+  yMin: 12.932,
+  xMax: 77.615,
+  yMax: 12.935,
+});
+
+// Or minLng/minLat/maxLng/maxLat alias
+const coverageAlt = await client.streetView.getCoverage({
+  minLng: 77.611,
+  minLat: 12.932,
+  maxLng: 77.615,
+  maxLat: 12.935,
+});
+```
+
+Validates locally that longitudes are within `[-180, 180]`, latitudes within `[-90, 90]`, and `xMin < xMax` / `yMin < yMax`.
+
+---
+
+## `getImageId`
+
+Find the nearest available Street View `imageId` to a coordinate, with an optional search `radius` in meters:
+
+```ts
+// Using (lat, lon)
+const nearest = await client.streetView.getImageId(12.934698, 77.613462, {
+  radius: 50,
+});
+
+// Or using an object / GeoJSON tuple
+const nearestObj = await client.streetView.getImageId(
+  { lat: 12.934698, lng: 77.613462 },
+  { radius: 50 },
+);
+
+console.log(nearest.imageId, nearest.distance);
+```
+
+---
+
+## `getMetadata`
+
+Retrieve full panoramic metadata (`imageUrl`, `lat`, `lon`, `bearing`, `capturedAt`, and linked `neighbors`) for a Street View `imageId`:
+
+```ts
+const { imageId } = await client.streetView.getImageId(12.934698, 77.613462, { radius: 50 });
+const meta = await client.streetView.getMetadata(imageId);
+
+console.log({
+  url: meta.imageUrl,
+  heading: meta.bearing,
+  location: { lat: meta.lat, lon: meta.lon },
+  nextNodes: meta.neighbors,
+});
+```

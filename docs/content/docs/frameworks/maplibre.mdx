@@ -1,0 +1,96 @@
+---
+title: MapLibre GL Integration
+description: Render Ola Maps vector maps with MapLibre GL using host-safe transformRequest, proxy mode, getMapOptions, and 27 typed map styles.
+---
+
+`ola-map-sdk/maplibre` connects Ola Maps vector tiles with **MapLibre GL JS**. Import helpers standalone from `ola-map-sdk/maplibre` (without instantiating `OlaMapsClient`) or call `client.getStyleURL()`, `client.getTransformRequest()`, and `client.getMapOptions()`.
+
+## Host-Safe URL Verification
+
+A common pitfall with custom `transformRequest` callbacks is appending `?api_key=...` to every URL MapLibre requests — leaking your API key to third-party GeoJSON overlays, sprite hosts, or external font CDNs.
+
+`getTransformRequest()` in `ola-map-sdk` v2.0 prevents this:
+1. Parses every URL using `new URL()` (never naive substring replacement).
+2. Checks `isOlaMapsHost(parsed.hostname)` — strictly matching `olamaps.io` and `*.olamaps.io`.
+3. Rewrites legacy `app.olamaps.io` tile URLs to `api.olamaps.io` by hostname only.
+4. Attaches `api_key`, `Authorization: Bearer ...`, or rewrites to `proxyBaseUrl` **only** for verified `*.olamaps.io` hosts.
+
+## Recommended: Proxy Mode (No Browser Secrets)
+
+Pair `ola-map-sdk/maplibre` with your [`ola-map-sdk/next`](/docs/frameworks/nextjs) proxy route so your API key stays on the server:
+
+```ts
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { getMapOptions } from 'ola-map-sdk/maplibre';
+
+const map = new maplibregl.Map(
+  getMapOptions(
+    { proxyBaseUrl: '/api/ola-maps' },
+    {
+      container: 'map',
+      style: 'default-light-standard',
+      center: [77.61, 12.93], // [lng, lat]
+      zoom: 14,
+    },
+  ),
+);
+```
+
+## Direct API Key or Bearer Token Mode
+
+```ts
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { OlaMapsClient } from 'ola-map-sdk';
+
+const client = new OlaMapsClient({ apiKey: import.meta.env.VITE_OLA_MAPS_API_KEY });
+
+const map = new maplibregl.Map(
+  client.getMapOptions({
+    container: 'map',
+    style: 'default-dark-standard',
+    center: [77.5946, 12.9716],
+    zoom: 13,
+  }),
+);
+```
+
+## Switching Styles Dynamically
+
+```ts
+import { getStyleURL } from 'ola-map-sdk/maplibre';
+
+// With Proxy Mode:
+map.setStyle(getStyleURL('default-dark-standard-satellite', '/api/ola-maps'));
+
+// Or via OlaMapsClient (uses proxy baseUrl when in proxy mode):
+map.setStyle(client.getStyleURL('eclipse-dark-standard'));
+```
+
+## Helper Reference
+
+| Function | Signature | Description |
+| --- | --- | --- |
+| `getStyleURL` | `(styleName?: OlaMapStyleName, baseUrl?: string) => string` | Returns `${baseUrl}/tiles/vector/v1/styles/${encodeURIComponent(styleName)}/style.json`. Defaults to `'default-light-standard'`. |
+| `getTransformRequest` | `(options?: MapLibreTransformOptions) => MapLibreTransformRequest` | Builds a host-safe MapLibre `transformRequest` supporting `{ apiKey }`, `{ accessToken }`, or `{ proxyBaseUrl }`. |
+| `getMapOptions` | `(auth: MapLibreTransformOptions, options?: MapLibreMapOptionsInput) => MapLibreMapOptions` | Produces a `maplibregl.Map` options object (default center `[77.61, 12.93]`, zoom `14`). |
+| `isOlaMapsHost` | `(hostname: string) => boolean` | Returns `true` strictly for `olamaps.io` and `*.olamaps.io`. |
+
+## Built-in Map Styles (`OLA_MAP_STYLES`)
+
+`OLA_MAP_STYLES` exports 27 typed style slugs (and `OlaMapStyleName` also accepts custom/regional string slugs such as `'default-light-standard-hi'`):
+
+| Family | Style Slugs |
+| --- | --- |
+| **Default Light** | `default-light-lite`, `default-light-standard`, `default-ultra-light-standard`, `default-light-full` |
+| **Default Dark & Satellite** | `default-dark-lite`, `default-dark-standard`, `default-dark-full`, `default-dark-standard-satellite` |
+| **Eclipse** | `eclipse-light-lite`, `eclipse-light-standard`, `eclipse-light-full`, `eclipse-dark-lite`, `eclipse-dark-standard`, `eclipse-dark-full` |
+| **Bolt** | `bolt-light`, `bolt-dark` |
+| **Vintage** | `vintage-light`, `vintage-dark` |
+| **Earth** | `default-earth-lite`, `default-earth-standard`, `default-earth-full` |
+| **OSM** | `positron`, `osm-bright`, `osm-basic`, `dark-matter`, `fiord-color`, `silver-osm` |
+
+<Callout type="info" title="Discovering styles dynamically">
+Availability of specific styles can vary by Ola Maps tier/plan. You can fetch the exact list enabled for your API key at runtime via `await client.tiles.getStyles()`.
+</Callout>

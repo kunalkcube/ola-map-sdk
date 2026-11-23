@@ -1,0 +1,118 @@
+---
+title: Tiles & Static Maps API
+description: Complete reference for client.tiles — vector styles, Style JSON, TileJSON, vector PBF tiles, raster PNG/JPG tiles, SDF font glyphs, static maps (Center, BBox, Auto), and 3D tilesets.
+---
+
+Access all 10 Ola Maps Tiles, Fonts, Static Image, and 3D Tileset endpoints via `client.tiles`. Binary tile and static image methods return standard `Promise<ArrayBuffer>` so they work identically across Node.js (`Buffer.from(buf)`), Browsers (`new Blob([buf])`), and Edge Workers (`new Response(buf)`).
+
+## Method Summary
+
+| Method | HTTP & Path | Returns / Validation |
+| --- | --- | --- |
+| `getStyles(reqOpts?)` | `GET /tiles/vector/v1/styles.json` | `Promise<TileStyleSummary[]>` |
+| `getStyleDetail(styleName, reqOpts?)` | `GET /tiles/vector/v1/styles/:style/style.json` | `Promise<TileStyleDetail>` |
+| `getDataTileJSON(datasetName, reqOpts?)` | `GET /tiles/vector/v1/data/:dataset.json` | `Promise<TileJSONResponse>` |
+| `getPBFFile(datasetName, z, x, y, reqOpts?)` | `GET /tiles/vector/v1/data/:dataset/:z/:x/:y.pbf` | `Promise<ArrayBuffer>` (`z: 0..24`) |
+| `getRasterTile(styleName, z, x, y, format?, reqOpts?)` | `GET /tiles/v1/styles/:style/:z/:x/:y.:format` | `Promise<ArrayBuffer>` (`z: 0..24`, `'png' \| 'jpg'`) |
+| `getFontGlyphs(fontstack, start, end, reqOpts?)` | `GET /tiles/vector/v1/fonts/:font/:start-:end.pbf` | `Promise<ArrayBuffer>` (`0..65535`, `end >= start`) |
+| `getStaticMapByCenter(style, lon, lat, zoom, w, h, fmt, opts?, reqOpts?)` | `GET /tiles/v1/styles/:style/static/:lon,:lat,:zoom/:w x :h.:fmt` | `Promise<ArrayBuffer>` (`zoom: 0..23`, `w/h: 1..2048`) |
+| `getStaticMapByBBox(style, bbox, w, h, fmt, opts?, reqOpts?)` | `GET /tiles/v1/styles/:style/static/:minx,:miny,:maxx,:maxy/:w x :h.:fmt` | `Promise<ArrayBuffer>` (`minx < maxx`, `miny < maxy`, `w/h: 1..2048`) |
+| `getStaticMapAuto(style, w, h, fmt, opts, reqOpts?)` | `GET /tiles/v1/styles/:style/static/auto/:w x :h.:fmt` | `Promise<ArrayBuffer>` (requires `marker` or `path`) |
+| `get3DTileset(reqOpts?)` | `GET /tiles/vector/v1/3dtiles/tileset.json` | `Promise<Tileset3DResponse>` |
+
+---
+
+## Vector Styles, TileJSON, PBF & Raster Tiles
+
+```ts
+// List styles available on your account
+const styles = await client.tiles.getStyles();
+
+// Fetch full MapLibre style JSON
+const styleSpec = await client.tiles.getStyleDetail('default-light-standard');
+
+// Vector TileJSON metadata & raw .pbf tile
+const tileJson = await client.tiles.getDataTileJSON('planet');
+const pbfBytes = await client.tiles.getPBFFile('planet', 14, 11722, 7613);
+
+// Raster tile image (.png or .jpg)
+const pngTile = await client.tiles.getRasterTile('default-light-standard', 14, 11722, 7613, 'png');
+
+// SDF Font Glyphs
+const glyphs = await client.tiles.getFontGlyphs('Noto Sans Bold', 0, 255);
+
+// 3D Buildings Tileset JSON
+const tileset3d = await client.tiles.get3DTileset();
+```
+
+---
+
+## Static Maps (`ByCenter`, `ByBBox`, `Auto`)
+
+Generate static PNG or JPEG map snapshots (up to `2048 × 2048` px) for emails, PDFs, OpenGraph thumbnails, or lightweight previews.
+
+Multiple markers passed as an array are automatically serialized as repeated `marker=...&marker=...` query parameters per Ola Maps' specification:
+
+```ts
+// 1. Centered on (lon, lat) at zoom 15
+const centerImg = await client.tiles.getStaticMapByCenter(
+  'default-light-standard',
+  77.61, // lon
+  12.93, // lat
+  15,    // zoom (0..23)
+  800,   // width (1..2048)
+  600,   // height (1..2048)
+  'png',
+  {
+    marker: ['77.61,12.93|red', '77.62,12.94|blue'],
+  },
+);
+
+// 2. Bounded by a bounding box
+const bboxImg = await client.tiles.getStaticMapByBBox(
+  'default-dark-standard',
+  { minx: 77.5, miny: 12.9, maxx: 77.7, maxy: 13.0 },
+  800,
+  600,
+  'jpg',
+);
+
+// 3. Auto-fit bounds around markers or a path (requires at least one marker or path)
+const autoImg = await client.tiles.getStaticMapAuto(
+  'default-light-standard',
+  800,
+  600,
+  'png',
+  {
+    marker: ['77.5433,12.9931|green', '77.5801,12.9720|red'],
+  },
+);
+```
+
+### Saving or Displaying `ArrayBuffer`
+
+<Tabs items={['Node.js (Write File)', 'Browser (Blob URL)', 'Next.js Route Response']}>
+  <Tab value="Node.js (Write File)">
+```ts
+import { writeFile } from 'node:fs/promises';
+
+await writeFile('map.png', Buffer.from(centerImg));
+```
+  </Tab>
+  <Tab value="Browser (Blob URL)">
+```ts
+const blob = new Blob([centerImg], { type: 'image/png' });
+const imageUrl = URL.createObjectURL(blob);
+```
+  </Tab>
+  <Tab value="Next.js Route Response">
+```ts
+return new Response(centerImg, {
+  headers: {
+    'Content-Type': 'image/png',
+    'Cache-Control': 'public, max-age=3600',
+  },
+});
+```
+  </Tab>
+</Tabs>

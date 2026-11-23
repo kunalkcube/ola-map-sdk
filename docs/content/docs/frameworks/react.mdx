@@ -1,0 +1,160 @@
+---
+title: React Hooks & Provider
+description: Use OlaMapsProvider, useOlaMapsClient, useOlaAutocomplete, useOlaDirections, and useOlaReverseGeocode in React 18+ and Next.js Client Components with built-in debouncing and AbortController cleanup.
+---
+
+`ola-map-sdk/react` ships lightweight, zero-extra-dependency React 18+ hooks marked with `'use client'` so they work directly in **Next.js App Router**, **Vite**, **Remix**, and **React SPA** applications. Every hook automatically cancels stale requests using `AbortController` on input changes and component unmount.
+
+## Exports Overview
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `<OlaMapsProvider>` | Component | Shares an `OlaMapsClient` across the component tree via React Context. |
+| `useOlaMapsClient()` | Hook | Returns the active `OlaMapsClient` from context (throws if outside provider). |
+| `useOlaAutocomplete(input, options)` | Hook | Debounced Places Autocomplete with automatic request cancellation. |
+| `useOlaDirections(origin, destination, options)` | Hook | Reactive turn-by-turn Directions fetcher. |
+| `useOlaReverseGeocode(coordinate, options)` | Hook | Reactive coordinate-to-address reverse geocoder. |
+
+## 1. Wrap Your App with `<OlaMapsProvider>`
+
+Pass either a `config` object (memoized automatically) or a pre-created `client` instance:
+
+```tsx
+'use client';
+
+import { OlaMapsProvider } from 'ola-map-sdk/react';
+
+export function App({ children }: { children: React.ReactNode }) {
+  return (
+    <OlaMapsProvider config={{ baseUrl: '/api/ola-maps' }}>
+      {children}
+    </OlaMapsProvider>
+  );
+}
+```
+
+## 2. `useOlaAutocomplete`
+
+Debounces keystrokes (default `250ms`), skips queries shorter than `minLength` (default `2`), and aborts previous in-flight requests whenever the query changes.
+
+```tsx
+'use client';
+
+import { useState } from 'react';
+import { useOlaAutocomplete } from 'ola-map-sdk/react';
+
+export function PlaceSearchBox({ onSelect }: { onSelect: (placeId: string) => void }) {
+  const [query, setQuery] = useState('');
+  const { predictions, loading, error } = useOlaAutocomplete(query, {
+    debounceMs: 250,
+    minLength: 2,
+    location: { lat: 12.9716, lng: 77.5946 },
+    radius: 10_000,
+  });
+
+  return (
+    <div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search Bengaluru places..."
+      />
+      {loading && <p>Searching...</p>}
+      {error && <p role="alert">{error.message}</p>}
+      <ul>
+        {predictions.map((p) => (
+          <li key={p.place_id}>
+            <button type="button" onClick={() => onSelect(p.place_id)}>
+              {p.structured_formatting?.main_text ?? p.description}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### Options & Return Value
+
+- **Options (`UseOlaAutocompleteOptions`)**: All [`AutocompleteOptions`](/docs/api/places#autocomplete) (`location`, `radius`, `strictbounds`, `language`, `types`) plus `debounceMs` (default `250`), `minLength` (default `2`), `enabled` (default `true`), and optional `client` override.
+- **Returns (`UseOlaAutocompleteResult`)**: `{ predictions, data, loading, error, refetch }`.
+
+## 3. `useOlaDirections`
+
+Automatically fetches directions whenever `origin` and `destination` are both non-nullish and `enabled` is `true`.
+
+```tsx
+'use client';
+
+import { useOlaDirections } from 'ola-map-sdk/react';
+import type { CoordinateInput } from 'ola-map-sdk';
+
+export function RouteSummary({
+  origin,
+  destination,
+}: {
+  origin: CoordinateInput | null;
+  destination: CoordinateInput | null;
+}) {
+  const { routes, loading, error, refetch } = useOlaDirections(origin, destination, {
+    mode: 'driving',
+    traffic_metadata: true,
+    alternatives: true,
+  });
+
+  if (loading) return <p>Calculating route...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+
+  const leg = routes[0]?.legs[0];
+  if (!leg) return null;
+
+  return (
+    <div>
+      <p>Distance: {leg.readable_distance}</p>
+      <p>Duration: {leg.readable_duration}</p>
+      <button type="button" onClick={refetch}>Refresh ETA</button>
+    </div>
+  );
+}
+```
+
+- **Options (`UseOlaDirectionsOptions`)**: All [`DirectionsOptions`](/docs/api/routing#getdirections) plus `enabled` (default `true`) and optional `client`.
+- **Returns (`UseOlaDirectionsResult`)**: `{ routes, data, loading, error, refetch }`.
+
+## 4. `useOlaReverseGeocode`
+
+Resolves `{ lat, lng }`, `{ lat, lon }`, or `[lng, lat]` coordinates to human-readable addresses reactively (e.g., when a user clicks or drags a map pin):
+
+```tsx
+'use client';
+
+import { useOlaReverseGeocode } from 'ola-map-sdk/react';
+
+export function PinAddress({ pin }: { pin: { lat: number; lng: number } | null }) {
+  const { results, loading } = useOlaReverseGeocode(pin, {
+    language: 'en',
+  });
+
+  if (!pin) return <p>Click on the map to pick a location.</p>;
+  if (loading) return <p>Looking up address...</p>;
+
+  return <p>{results[0]?.formatted_address ?? 'Address unavailable'}</p>;
+}
+```
+
+- **Options (`UseOlaReverseGeocodeOptions`)**: `{ language?: string; enabled?: boolean; client?: OlaMapsClient }`.
+- **Returns (`UseOlaReverseGeocodeResult`)**: `{ results, data, loading, error, refetch }`.
+
+## 5. Direct Client Access (`useOlaMapsClient`)
+
+For imperative actions (like fetching Place Details on click, checking a Geofence, or loading Street View metadata), grab the shared client via `useOlaMapsClient()`:
+
+```tsx
+const client = useOlaMapsClient();
+
+async function handleSelect(placeId: string) {
+  const details = await client.places.placeDetailsAdvanced(placeId);
+  console.log(details.result.formatted_phone_number);
+}
+```

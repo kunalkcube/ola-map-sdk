@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/black.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@theme inline {
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  --radius-full: 0px;
+}
+
+:root {
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #0a0a0a;
+  --color-fd-muted: #f5f5f5;
+  --color-fd-muted-foreground: #525252;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #0a0a0a;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #0a0a0a;
+  --color-fd-border: #e5e5e5;
+  --color-fd-primary: #0a0a0a;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #f5f5f5;
+  --color-fd-secondary-foreground: #0a0a0a;
+  --color-fd-accent: #ededed;
+  --color-fd-accent-foreground: #0a0a0a;
+  --color-fd-ring: #0a0a0a;
+  --color-fd-info: #525252;
+  --color-fd-warning: #404040;
+  --color-fd-error: #171717;
+  --color-fd-success: #262626;
+  --color-fd-idea: #525252;
+  --color-fd-diff-add: rgba(0, 0, 0, 0.06);
+  --color-fd-diff-add-symbol: #171717;
+  --color-fd-diff-remove: rgba(0, 0, 0, 0.04);
+  --color-fd-diff-remove-symbol: #737373;
+}
+
+.dark {
+  --color-fd-background: #000000;
+  --color-fd-foreground: #fafafa;
+  --color-fd-muted: #111111;
+  --color-fd-muted-foreground: #a3a3a3;
+  --color-fd-popover: #0a0a0a;
+  --color-fd-popover-foreground: #fafafa;
+  --color-fd-card: #080808;
+  --color-fd-card-foreground: #fafafa;
+  --color-fd-border: #262626;
+  --color-fd-primary: #ffffff;
+  --color-fd-primary-foreground: #000000;
+  --color-fd-secondary: #171717;
+  --color-fd-secondary-foreground: #fafafa;
+  --color-fd-accent: #1c1c1c;
+  --color-fd-accent-foreground: #ffffff;
+  --color-fd-ring: #ffffff;
+  --color-fd-info: #a3a3a3;
+  --color-fd-warning: #d4d4d4;
+  --color-fd-error: #e5e5e5;
+  --color-fd-success: #d4d4d4;
+  --color-fd-idea: #a3a3a3;
+  --color-fd-diff-add: rgba(255, 255, 255, 0.08);
+  --color-fd-diff-add-symbol: #fafafa;
+  --color-fd-diff-remove: rgba(255, 255, 255, 0.04);
+  --color-fd-diff-remove-symbol: #737373;
+}
+
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}

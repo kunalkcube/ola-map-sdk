@@ -1,0 +1,39 @@
+---
+title: Introduction
+description: Zero-dependency TypeScript SDK for the Ola Maps API covering Places, Routing, Roads, Street View, Geofencing, Elevation, Tiles, OAuth 2.0, Next.js, React, and MapLibre GL.
+---
+
+**`ola-map-sdk` v2.0** is a zero-dependency TypeScript SDK for the **Ola Maps API**, built on standard Web APIs (`fetch`, `URLSearchParams`, `FormData`, `Blob`, `AbortController`, and Web Crypto) so it runs across **Node.js 18+**, **Browsers**, **Next.js (App Router & Edge)**, **React**, **Vite**, **Cloudflare Workers**, **Bun**, and **Deno**.
+
+<Callout type="info" title="What changed in v2.0?">
+v2.0 is a TypeScript rewrite that drops `axios`, `uuid`, and `form-data`, adds **OAuth 2.0**, **Street View**, **Next.js SSRF-safe proxy**, **React hooks**, **host-safe MapLibre integration**, automatic retries with `Retry-After`, in-flight `GET` deduplication, LRU caching, and typed error classes, while keeping `new OlaMapsClient('YOUR_API_KEY')` backwards compatible.
+</Callout>
+
+## Overview
+
+| Capability | Details |
+| --- | --- |
+| **Zero runtime dependencies** | Native `fetch`, `FormData`, `Blob`, `AbortController`, and `crypto.randomUUID()`. No `axios`, `uuid`, or `form-data`. |
+| **API coverage** | All 7 Ola Maps modules — **Places (10)**, **Routing (6)**, **Roads (3)**, **Street View (3)**, **Geofencing (6)**, **Elevation (2)**, and **Tiles & Static Maps (10)** — plus **OAuth 2.0**. |
+| **Subpath exports** | Import only what you need: `ola-map-sdk`, `ola-map-sdk/next`, `ola-map-sdk/react`, and `ola-map-sdk/maplibre`. |
+| **Transport** | Configurable timeouts, per-request `AbortSignal`, exponential backoff + jitter retries, `Retry-After` support, `GET` deduplication, optional LRU+TTL cache, and request/response hooks. |
+| **Credential safety** | Automatic redaction of `api_key`, `client_secret`, and `Bearer` tokens in errors and hooks; strict `*.olamaps.io` host checks in MapLibre; allowlisted SSRF-safe proxy for Next.js. |
+| **Flexible coordinates** | Pass `{ lat, lng }`, `{ lat, lon }`, `[lng, lat]` (GeoJSON/MapLibre), or `"lat,lng"` strings to any method with local range validation. |
+
+## Package Exports
+
+`ola-map-sdk` ships dual **ESM + CJS** builds with full `.d.ts` / `.d.cts` type declarations and `"sideEffects": false` for tree-shaking:
+
+- **`ola-map-sdk`** — Core `OlaMapsClient`, all 7 API endpoint modules, typed error hierarchy, coordinate helpers, and MapLibre convenience methods.
+- **`ola-map-sdk/next`** — `createOlaMapsProxyHandler()` for Next.js App Router (`app/api/ola-maps/[...path]/route.ts`) to keep API keys and OAuth secrets on the server.
+- **`ola-map-sdk/react`** — Client-safe (`'use client'`) `<OlaMapsProvider>`, `useOlaMapsClient`, `useOlaAutocomplete`, `useOlaDirections`, and `useOlaReverseGeocode` with automatic `AbortController` cleanup.
+- **`ola-map-sdk/maplibre`** — Standalone `getStyleURL`, host-safe `getTransformRequest`, `getMapOptions`, `isOlaMapsHost`, and the typed `OLA_MAP_STYLES` catalog (27 styles).
+
+## Next Steps
+
+<Cards>
+  <Card title="Installation" description="Install ola-map-sdk with npm, pnpm, yarn, or bun and check runtime requirements." href="/docs/installation" />
+  <Card title="Quick Start" description="Make your first Places Autocomplete and Routing request." href="/docs/quick-start" />
+  <Card title="Next.js Proxy Guide" description="Keep API keys and OAuth secrets server-side with App Router." href="/docs/frameworks/nextjs" />
+  <Card title="API Reference" description="Every method, parameter, validation cap, and response type." href="/docs/api" />
+</Cards>

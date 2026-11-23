@@ -1,0 +1,119 @@
+---
+title: Next.js Integration
+description: Proxy Ola Maps API requests in Next.js App Router with createOlaMapsProxyHandler, SSRF path allowlisting, custom authorization hooks, and Server Component caching.
+---
+
+`ola-map-sdk/next` exports `createOlaMapsProxyHandler()`, a Next.js App Router Route Handler that keeps your Ola Maps API key or OAuth 2.0 `clientSecret` on the server while streaming both JSON and binary tile/image responses to browser clients.
+
+## 1. Create the Catch-All Proxy Route
+
+Create `app/api/ola-maps/[...path]/route.ts`:
+
+```ts
+import { createOlaMapsProxyHandler } from 'ola-map-sdk/next';
+
+export const { GET, POST, PUT, DELETE } = createOlaMapsProxyHandler({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  // Or use server-side OAuth 2.0 instead of apiKey:
+  // clientId: process.env.OLA_CLIENT_ID!,
+  // clientSecret: process.env.OLA_CLIENT_SECRET!,
+  cacheControl: 'public, s-maxage=60, stale-while-revalidate=300',
+});
+```
+
+### Proxy Behavior
+
+- **Secret injection on server only**: Strips any client-supplied `api_key`, `client_secret`, or `access_token` query params before attaching your server credentials.
+- **SSRF & path traversal protection**: Blocks `..`, `\`, `//`, `@`, control characters, and any path outside the allowlisted Ola Maps API prefixes.
+- **Per-request trace headers**: Preserves or generates `X-Request-Id` and `X-Correlation-Id`.
+- **Binary & JSON streaming**: Preserves upstream `Content-Type` and streams vector `.pbf` tiles, raster `.png`/`.jpg` static maps, and JSON payloads directly without buffering corruption.
+- **Next.js 15 & 16 `Promise` params compatible**: Awaits `context.params` safely whether it is a plain object or a Promise.
+
+## 2. Point Browser Clients at the Proxy
+
+In Client Components, `<OlaMapsProvider>`, or MapLibre GL, pass `baseUrl: '/api/ola-maps'` with **no API key**:
+
+```tsx
+'use client';
+
+import { OlaMapsProvider } from 'ola-map-sdk/react';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <OlaMapsProvider config={{ baseUrl: '/api/ola-maps' }}>
+      {children}
+    </OlaMapsProvider>
+  );
+}
+```
+
+## 3. Add Session / Rate-Limit Authorization
+
+Use the `authorize(request)` hook to enforce authentication, origin checks, or per-user rate limits before any request reaches Ola Maps:
+
+```ts
+import { createOlaMapsProxyHandler } from 'ola-map-sdk/next';
+import { getSession } from '@/lib/auth';
+
+export const { GET, POST, PUT, DELETE } = createOlaMapsProxyHandler({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  authorize: async (request) => {
+    const session = await getSession(request);
+    if (!session) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return true;
+  },
+});
+```
+
+Returning `false` automatically returns `403 Forbidden`; returning a `Response` short-circuits with your custom status and body.
+
+## 4. `OlaMapsProxyConfig` Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `apiKey` | `string` | — | Server-side Ola Maps API key. |
+| `clientId` / `clientSecret` | `string` | — | Server-side OAuth 2.0 credentials. |
+| `scope` | `string` | `'openid'` | OAuth 2.0 scope. |
+| `tokenUrl` | `string` | `'https://api.olamaps.io/auth/v1/token'` | OAuth 2.0 token endpoint. |
+| `upstreamBaseUrl` | `string` | `'https://api.olamaps.io'` | Upstream Ola Maps API origin. |
+| `basePath` | `string` | `'/api/ola-maps'` | Fallback route prefix stripped when `context.params` is unavailable. |
+| `allowedPrefixes` | `readonly string[]` | `DEFAULT_ALLOWED_PROXY_PREFIXES` | Allowlisted upstream prefixes (`/places/v1/`, `/routing/v1/`, `/tiles/v1/`, `/tiles/vector/v1/`, `/sli/v1/streetview/`, `/sli/streetview/`). |
+| `allowedMethods` | `readonly string[]` | `['GET', 'POST', 'PUT', 'DELETE']` | Allowed HTTP methods (`405` otherwise). |
+| `cacheControl` | `string` | — | `Cache-Control` header applied to successful `GET` responses. |
+| `authorize` | `(req: Request) => boolean \| Response \| Promise<...>` | — | Custom auth/rate-limit guard run before forwarding. |
+| `fetch` | `FetchLike` | `globalThis.fetch` | Custom `fetch` implementation. |
+
+## 5. Server Components & Data Cache
+
+Inside Server Components or Server Actions, instantiate `OlaMapsClient` directly and pass Next.js's extended `fetch` to cache responses across requests:
+
+```ts
+// lib/ola-server.ts
+import { OlaMapsClient } from 'ola-map-sdk';
+
+export const olaServer = new OlaMapsClient({
+  apiKey: process.env.OLA_MAPS_API_KEY!,
+  fetch: (url, init) =>
+    fetch(url, {
+      ...init,
+      next: { revalidate: 300 },
+    }),
+});
+```
+
+```tsx
+// app/stores/[slug]/page.tsx (Server Component)
+import { olaServer } from '@/lib/ola-server';
+
+export default async function StorePage() {
+  const geo = await olaServer.places.geocode('MG Road, Bengaluru');
+  const first = geo.geocodingResults[0];
+
+  return <p>{first?.formatted_address}</p>;
+}
+```
